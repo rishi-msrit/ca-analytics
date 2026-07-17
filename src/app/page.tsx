@@ -158,7 +158,7 @@ export default function HomePage() {
                 CA Analytics
               </p>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Nifty 50 &middot; Corporate Actions Consistency Monitor
+                80 stocks &middot; Adjustment Consistency Monitor
               </p>
             </div>
           </div>
@@ -174,12 +174,12 @@ export default function HomePage() {
             <div className="hidden md:flex items-center gap-2">
               <span className="text-xs px-2.5 py-1 rounded-full border font-medium"
                 style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.25)', color: '#818CF8' }}>
-                yfinance
+                Yahoo Adj Close
               </span>
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>vs</span>
               <span className="text-xs px-2.5 py-1 rounded-full border font-medium"
                 style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.25)', color: '#FCD34D' }}>
-                Stooq
+                Custom Backward Adj
               </span>
             </div>
 
@@ -218,14 +218,14 @@ export default function HomePage() {
               Corporate Actions Data Consistency Monitor
             </h1>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-              Stock prices must be adjusted for dividends and splits to produce correct return calculations.
-              Different data vendors apply these adjustments differently — sometimes on different dates, with different rounding, or using different dividend amounts.
-              This pipeline catches those inconsistencies by comparing two independently-adjusted price series for every Nifty 50 stock and measuring how much the gap distorts a return calculation.
+              When a stock pays a dividend or splits, every historical price needs to be adjusted backward — otherwise return calculations break.
+              Yahoo Finance does this internally with their own algorithm. This pipeline re-applies the same adjustment from scratch using the published corporate action data and compares the two.
+              Any gap reveals where Yahoo&apos;s implementation deviates from a standard backward-adjustment formula, and exactly how much that error distorts a 3-year return figure.
             </p>
             <div className="flex flex-wrap gap-5 mt-5">
               <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 <Database className="w-3.5 h-3.5 text-indigo-400" />
-                Neon Postgres &middot; pre-computed results
+                Neon Postgres &middot; pre-computed nightly
               </div>
               <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
@@ -233,7 +233,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                50 stocks &middot; 3-year daily window
+                80 stocks &middot; Nifty 50 + S&amp;P 500 top 20 + global
               </div>
             </div>
           </div>
@@ -246,10 +246,10 @@ export default function HomePage() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
-              This run
+              Latest pipeline run
             </h2>
             <Tooltip
-              content="These numbers are computed fresh each time the daily pipeline runs and stored in the database. The dashboard reads pre-computed results — no live API calls to Yahoo or Stooq on page load."
+              content="Computed once daily by the GitHub Actions pipeline and stored in Postgres. The dashboard reads pre-computed results — no live market API calls on page load."
               side="right"
             />
           </div>
@@ -267,16 +267,16 @@ export default function HomePage() {
               label="Largest Return Error"
               value={summaryLoading ? null : summary?.maxReturnError != null ? `${summary.maxReturnError.toFixed(2)} pp` : '0 pp'}
               subtext="Biggest 3-year return distortion caused by an adjustment mismatch — in percentage points"
-              info="For each flagged stock, we compute: |return_yf - return_stooq| where return = (adj_close_end / adj_close_start) - 1. This KPI shows the worst case across all Nifty 50 stocks."
+              info="For each flagged stock: |return_series1 - return_series2| where return = (adj_end / adj_start) - 1 over the 3-year window. This KPI shows the worst case across all 80 tracked stocks."
               icon="error"
               loading={summaryLoading}
               delay={0.08}
             />
             <KpiCard
               label="Stocks Affected"
-              value={summaryLoading ? null : `${summary?.stocksAffected ?? 0} / ${summary?.universeSize ?? 50}`}
-              subtext="Nifty 50 constituents with at least one flagged divergence"
-              info="Out of all 50 Nifty 50 stocks tracked. A stock counts as 'affected' if it has at least one trading day with a flagged adjustment inconsistency in the current 3-year window."
+              value={summaryLoading ? null : `${summary?.stocksAffected ?? 0} / ${summary?.universeSize ?? 80}`}
+              subtext="Stocks with at least one flagged adjustment divergence in the 3-year window"
+              info="Tracks 80 stocks: Nifty 50 (India) + top 20 S&P 500 (USA) + 10 global large-caps. A stock is flagged if any single trading day shows >0.5% divergence near a corporate action."
               icon="stocks"
               loading={summaryLoading}
               delay={0.16}
@@ -295,17 +295,17 @@ export default function HomePage() {
         >
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-0.5 rounded" style={{ background: '#6366F1', display: 'inline-block' }} />
-            <strong className="text-indigo-300">Yahoo adj:</strong> CRSP-style backward adjustment applied by Yahoo Finance
+            <strong className="text-indigo-300">Series 1:</strong> Yahoo Finance Adj Close — their internal CRSP-style backward adjustment
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-0.5 rounded" style={{
               display: 'inline-block',
               backgroundImage: 'repeating-linear-gradient(90deg,#F59E0B 0,#F59E0B 4px,transparent 4px,transparent 7px)',
             }} />
-            <strong className="text-amber-300">Stooq adj:</strong> Stooq raw close + custom backward adjustment algorithm
+            <strong className="text-amber-300">Series 2:</strong> Raw close + textbook backward adjustment re-applied from Yahoo&apos;s published event data
           </div>
           <div className="flex items-center gap-1.5">
-            <strong className="text-slate-300">Threshold:</strong> divergence flagged at &gt;0.5% — above floating-point noise, below a typical missed dividend
+            <strong className="text-slate-300">Threshold:</strong> flagged at &gt;0.5% divergence within 7 days of a corporate action ex-date
           </div>
         </div>
 
@@ -335,10 +335,10 @@ export default function HomePage() {
         className="max-w-7xl mx-auto px-6 py-8 mt-4 border-t text-xs flex flex-wrap items-center justify-between gap-3"
         style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
       >
-        <span>CA Analytics &middot; Nifty 50 Corporate Actions Consistency Pipeline</span>
+        <span>CA Analytics &middot; Corporate Actions Adjustment Consistency Pipeline</span>
         <div className="flex items-center gap-4">
-          <span>Source 1: <strong className="text-indigo-300">Yahoo Finance</strong></span>
-          <span>Source 2: <strong className="text-amber-300">Stooq</strong></span>
+          <span>Data: <strong className="text-indigo-300">Yahoo Finance (yfinance)</strong></span>
+          <span>Method: <strong className="text-amber-300">Dual-series adjustment comparison</strong></span>
           <span>DB: <strong className="text-slate-300">Neon Postgres</strong></span>
         </div>
       </footer>

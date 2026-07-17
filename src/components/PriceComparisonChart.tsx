@@ -141,11 +141,11 @@ export default function PriceComparisonChart({ yfPrices, stooqPrices, corporateA
             connectNulls={false}
           />
 
-          {/* Series 2 — Stooq custom-adjusted close */}
+          {/* Series 2 — custom backward-adjusted close */}
           <Line
             type="monotone"
             dataKey="stooq"
-            name="Stooq (Custom-Adjusted)"
+            name="Custom Backward Adj"
             stroke="#F59E0B"
             strokeWidth={2}
             dot={false}

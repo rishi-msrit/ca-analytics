@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   keywords: [
     'corporate actions', 'Nifty 50', 'data quality', 'adjusted prices',
     'dividends', 'stock splits', 'return calculation', 'financial data pipeline',
-    'NSE India', 'yfinance', 'Stooq',
+    'NSE India', 'yfinance',
   ],
   authors: [{ name: 'CA Analytics' }],
   openGraph: {

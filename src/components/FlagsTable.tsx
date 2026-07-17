@@ -155,13 +155,13 @@ export default function FlagsTable({ rows, loading, selectedTicker, onSelectTick
               <th>
                 <div className="flex items-center gap-1.5">
                   YF Return
-                  <Tooltip content="3-year cumulative return using Yahoo Finance's adjusted price series as the start and end price." side="bottom" />
+                  <Tooltip content="3-year cumulative return using Yahoo Finance's own Adj Close series (their internal backward adjustment)." side="bottom" />
                 </div>
               </th>
               <th>
                 <div className="flex items-center gap-1.5">
-                  Stooq Return
-                  <Tooltip content="3-year cumulative return using Stooq's prices with our custom backward-adjustment applied." side="bottom" />
+                  Series 2 Return
+                  <Tooltip content="3-year cumulative return using the custom backward-adjustment applied to Yahoo's raw close prices." side="bottom" />
                 </div>
               </th>
             </tr>

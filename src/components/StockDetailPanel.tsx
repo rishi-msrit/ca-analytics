@@ -156,7 +156,7 @@ export default function StockDetailPanel({
                     value={`${fmt(detail.summary.maxDivergencePct, 3)}%`}
                     sub="worst single-day price gap between sources"
                     color="#F59E0B"
-                    info="The largest relative difference between Yahoo's adjusted close and the Stooq custom-adjusted series on any single trading day. Flagged because it coincides with a corporate action."
+                    info="The largest relative difference between Yahoo's Adj Close (Series 1) and the custom backward-adjusted series (Series 2) on any single trading day. Flagged when it coincides with a corporate action."
                   />
                   <StatCard
                     label="Yahoo 3yr Return"
@@ -166,11 +166,11 @@ export default function StockDetailPanel({
                     info="Total return from start to end of the 3-year window using Yahoo Finance's Adj Close series. This is what you'd see if you used yfinance with auto_adjust=True."
                   />
                   <StatCard
-                    label="Stooq 3yr Return"
+                    label="Series 2 Return"
                     value={`${fmt(detail.summary.returnStooqAdj, 1)}%`}
-                    sub="Stooq raw prices + custom backward adjustment"
+                    sub="Raw close + textbook backward adjustment"
                     color="#F59E0B"
-                    info="Total return using Stooq's independently-sourced prices with a custom backward adjustment applied using yfinance's corporate action dates and ratios but our own adjustment algorithm."
+                    info="Total return using Yahoo's raw (unadjusted) close with a standard backward-adjustment algorithm applied from scratch using the same dividend/split data that yfinance publishes."
                   />
                 </div>
 
@@ -188,7 +188,7 @@ export default function StockDetailPanel({
                       <strong className="text-amber-400">{fmt(detail.summary.maxDivergencePct, 3)}%</strong>
                       {detail.summary.worstFlagDate ? ` on ${detail.summary.worstFlagDate}` : ''}.
                       A portfolio analyst using the wrong source would report a 3-year return of{' '}
-                      {fmt(detail.summary.returnYf, 1)}% (Yahoo) vs {fmt(detail.summary.returnStooqAdj, 1)}% (Stooq),
+                      {fmt(detail.summary.returnYf, 1)}% (Series 1) vs {fmt(detail.summary.returnStooqAdj, 1)}% (Series 2),
                       a difference of{' '}
                       <strong className="text-red-400">{fmt(detail.summary.returnErrorPct)} percentage points</strong>.
                       The divergence is linked to a {detail.summary.primaryCause === 'both'
@@ -219,7 +219,7 @@ export default function StockDetailPanel({
                           display: 'inline-block',
                           backgroundImage: 'repeating-linear-gradient(90deg,#F59E0B 0,#F59E0B 4px,transparent 4px,transparent 8px)',
                         }} />
-                        Stooq (custom adj.)
+                        Custom Backward Adj
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="w-5 h-px" style={{ background: 'rgba(239,68,68,0.6)', display: 'inline-block' }} />
@@ -262,7 +262,7 @@ export default function StockDetailPanel({
                           <tr>
                             <th>Date</th>
                             <th>Yahoo Adj</th>
-                            <th>Stooq Adj</th>
+                            <th>Series 2 Adj</th>
                             <th>Divergence</th>
                             <th>Nearby Action</th>
                           </tr>
