@@ -1,17 +1,11 @@
 """
-analyze.py - Consistency detection and impact calculation.
+analyze.py
 
-Compares two adjusted price series for every tracked stock:
-  Series 1: Yahoo Finance Adj Close (their internal backward adjustment)
-  Series 2: Raw close with textbook backward adjustment applied from scratch
+For each tracked stock, compares two adjusted price series:
+  S1: Yahoo Finance Adj Close (their own backward adjustment)
+  S2: Raw close with standard backward adjustment applied from scratch
 
-Flags dates where the two series diverge beyond the threshold.
-The divergence does not require a nearby corporate action - all differences
-above the threshold are reported, with nearby action annotated if present.
-
-Usage:
-    DATABASE_URL="postgresql://..." python scripts/analyze.py
-    DATABASE_URL="postgresql://..." python scripts/analyze.py --dry-run
+Flags dates where the two series differ by more than DIVERGENCE_THRESHOLD_PCT.
 """
 
 import os
@@ -23,8 +17,8 @@ import pandas as pd
 import psycopg2
 import psycopg2.extras
 
-DIVERGENCE_THRESHOLD_PCT = 0.1   # flag anything above 0.1% - catches real adj differences
-ACTION_WINDOW_DAYS = 15           # look ±15 days for a nearby corporate action
+DIVERGENCE_THRESHOLD_PCT = 0.02   # 0.02% catches real algorithm differences
+ACTION_WINDOW_DAYS = 15
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +42,7 @@ def load_tickers(conn):
         return cur.fetchall()
 
 
-def load_yf_prices(conn, ticker: str) -> pd.DataFrame:
+def load_yf_prices(conn, ticker):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT date, close, adj_close FROM raw_prices_yf WHERE ticker = %s ORDER BY date;",
@@ -62,7 +56,7 @@ def load_yf_prices(conn, ticker: str) -> pd.DataFrame:
     return df.set_index("date").sort_index().apply(pd.to_numeric, errors="coerce")
 
 
-def load_stooq_prices(conn, ticker: str) -> pd.DataFrame:
+def load_raw_prices(conn, ticker):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT date, close FROM raw_prices_stooq WHERE ticker = %s ORDER BY date;",
@@ -78,7 +72,7 @@ def load_stooq_prices(conn, ticker: str) -> pd.DataFrame:
     return df
 
 
-def load_corporate_actions(conn, ticker: str) -> pd.DataFrame:
+def load_corporate_actions(conn, ticker):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT ex_date, action_type, value FROM corporate_actions_yf WHERE ticker = %s ORDER BY ex_date;",
@@ -93,14 +87,10 @@ def load_corporate_actions(conn, ticker: str) -> pd.DataFrame:
     return df
 
 
-def build_custom_adjusted(raw_df: pd.DataFrame, actions_df: pd.DataFrame) -> pd.Series:
+def build_custom_adjusted(raw_df, actions_df):
     """
-    Textbook backward adjustment on raw close prices.
-
-    Works newest-to-oldest. For each corporate action:
-      - Split (ratio R): multiply all prior prices by 1/R
-      - Dividend (amount A): multiply all prior prices by (P - A) / P
-        where P is the price on the ex-date
+    Apply standard backward adjustment to raw closes using corporate action events.
+    Processes newest-to-oldest so each factor uses the pre-event raw price.
     """
     if raw_df.empty or "close" not in raw_df.columns:
         return pd.Series(dtype=float)
@@ -115,32 +105,34 @@ def build_custom_adjusted(raw_df: pd.DataFrame, actions_df: pd.DataFrame) -> pd.
         if value <= 0:
             continue
 
-        before = prices.index < ex_date
+        before_mask = prices.index < ex_date
+        before = prices[before_mask]
+        after = prices[prices.index >= ex_date]
 
         if action["action_type"] == "split":
             if value != 1.0:
-                prices[before] /= value
+                prices[before_mask] /= value
 
         elif action["action_type"] == "dividend":
-            post = prices[prices.index >= ex_date]
-            if post.empty:
+            if before.empty or after.empty:
                 continue
-            p = float(post.iloc[0])
-            if p <= 0:
+            # Use the last raw price BEFORE ex-date for the factor
+            p_before = float(before.iloc[-1])
+            if p_before <= value:
                 continue
-            factor = (p - value) / p
+            factor = (p_before - value) / p_before
             if 0 < factor < 1:
-                prices[before] *= factor
+                prices[before_mask] *= factor
 
     return prices
 
 
-def find_nearby_action(flag_date, actions_df: pd.DataFrame):
+def find_nearby_action(flag_date, actions_df):
     if actions_df.empty:
         return None, None, None
-    action_dates = pd.to_datetime(actions_df["ex_date"])
+    dates = pd.to_datetime(actions_df["ex_date"])
     window = pd.Timedelta(days=ACTION_WINDOW_DAYS)
-    deltas = (action_dates - flag_date).abs()
+    deltas = (dates - flag_date).abs()
     idx = deltas.argmin()
     if deltas.iloc[idx] <= window:
         a = actions_df.iloc[idx]
@@ -148,70 +140,67 @@ def find_nearby_action(flag_date, actions_df: pd.DataFrame):
     return None, None, None
 
 
-def detect_divergences(yf_adj: pd.Series, custom_adj: pd.Series, actions_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Flag every date where the two adjusted series differ by more than DIVERGENCE_THRESHOLD_PCT.
-    A nearby corporate action is annotated if one falls within ACTION_WINDOW_DAYS, but is not
-    required for a flag to be raised.
-    """
-    if yf_adj.empty or custom_adj.empty:
+def detect_divergences(s1, s2, actions_df):
+    if s1.empty or s2.empty:
         return pd.DataFrame()
 
-    combined = pd.DataFrame({"adj_yf": yf_adj, "adj_stooq": custom_adj}).dropna()
+    combined = pd.DataFrame({"s1": s1, "s2": s2}).dropna()
     if combined.empty:
         return pd.DataFrame()
 
-    combined["divergence_pct"] = (
-        (combined["adj_yf"] - combined["adj_stooq"]).abs() / combined["adj_yf"].abs() * 100
+    combined["div_pct"] = (
+        (combined["s1"] - combined["s2"]).abs() / combined["s1"].abs() * 100
     )
 
-    flagged = combined[combined["divergence_pct"] > DIVERGENCE_THRESHOLD_PCT].copy()
+    # Log the maximum divergence seen regardless of threshold (for diagnostics)
+    max_div = combined["div_pct"].max()
+    log.info(f"  max divergence in series: {max_div:.4f}%")
+
+    flagged = combined[combined["div_pct"] > DIVERGENCE_THRESHOLD_PCT].copy()
     if flagged.empty:
         return pd.DataFrame()
 
     results = []
     for flag_date, row in flagged.iterrows():
-        nearby_action, nearby_value, nearby_date = find_nearby_action(flag_date, actions_df)
+        act, val, act_date = find_nearby_action(flag_date, actions_df)
         results.append({
             "flag_date": flag_date.date(),
-            "adj_close_yf": float(row["adj_yf"]),
-            "adj_close_stooq": float(row["adj_stooq"]),
-            "divergence_pct": float(row["divergence_pct"]),
-            "nearby_action": nearby_action,
-            "nearby_action_value": nearby_value,
-            "nearby_action_date": nearby_date,
+            "adj_close_yf": float(row["s1"]),
+            "adj_close_stooq": float(row["s2"]),
+            "divergence_pct": float(row["div_pct"]),
+            "nearby_action": act,
+            "nearby_action_value": val,
+            "nearby_action_date": act_date,
         })
-
     return pd.DataFrame(results)
 
 
-def calculate_impact(yf_adj: pd.Series, custom_adj: pd.Series) -> dict:
-    yf_v = yf_adj.dropna()
-    custom_v = custom_adj.dropna()
-
-    if len(yf_v) < 2 or len(custom_v) < 2:
+def calculate_impact(s1, s2):
+    yf_v = s1.dropna()
+    s2_v = s2.dropna()
+    if len(yf_v) < 2 or len(s2_v) < 2:
         return {"return_yf": None, "return_stooq_adj": None, "return_error_pct": None}
 
-    common_start = max(yf_v.index.min(), custom_v.index.min())
-    common_end = min(yf_v.index.max(), custom_v.index.max())
+    start = max(yf_v.index.min(), s2_v.index.min())
+    end = min(yf_v.index.max(), s2_v.index.max())
 
-    yf_w = yf_v[(yf_v.index >= common_start) & (yf_v.index <= common_end)]
-    cust_w = custom_v[(custom_v.index >= common_start) & (custom_v.index <= common_end)]
+    yf_w = yf_v[(yf_v.index >= start) & (yf_v.index <= end)]
+    s2_w = s2_v[(s2_v.index >= start) & (s2_v.index <= end)]
 
-    if len(yf_w) < 2 or len(cust_w) < 2:
+    if len(yf_w) < 2 or len(s2_w) < 2:
         return {"return_yf": None, "return_stooq_adj": None, "return_error_pct": None}
 
     r_yf = (float(yf_w.iloc[-1]) / float(yf_w.iloc[0]) - 1) * 100
-    r_cust = (float(cust_w.iloc[-1]) / float(cust_w.iloc[0]) - 1) * 100
+    r_s2 = (float(s2_w.iloc[-1]) / float(s2_w.iloc[0]) - 1) * 100
 
     return {
         "return_yf": round(r_yf, 4),
-        "return_stooq_adj": round(r_cust, 4),
-        "return_error_pct": round(abs(r_yf - r_cust), 4),
+        "return_stooq_adj": round(r_s2, 4),
+        "return_error_pct": round(abs(r_yf - r_s2), 4),
     }
 
 
-def upsert_flags(conn, ticker: str, flags_df: pd.DataFrame, dry_run=False):
+def upsert_flags(conn, ticker, flags_df, dry_run=False):
     if flags_df.empty:
         return
     rows = [
@@ -285,7 +274,7 @@ def upsert_impact(conn, ticker, company, flags_df, impact, dry_run=False):
 def main(dry_run=False):
     conn = get_connection()
     tickers = load_tickers(conn)
-    log.info(f"Analyzing {len(tickers)} tickers, threshold={DIVERGENCE_THRESHOLD_PCT}%")
+    log.info(f"Analyzing {len(tickers)} tickers — threshold: {DIVERGENCE_THRESHOLD_PCT}%")
 
     total_flagged = total_flags = 0
 
@@ -293,27 +282,29 @@ def main(dry_run=False):
         log.info(f"[{i:02d}/{len(tickers)}] {ticker}")
 
         yf_df = load_yf_prices(conn, ticker)
-        stooq_df = load_stooq_prices(conn, ticker)
+        raw_df = load_raw_prices(conn, ticker)
         actions_df = load_corporate_actions(conn, ticker)
 
-        if yf_df.empty or stooq_df.empty:
-            log.warning("  No price data, skipping")
+        log.info(f"  yf rows={len(yf_df)}, raw rows={len(raw_df)}, actions={len(actions_df)}")
+
+        if yf_df.empty or raw_df.empty:
+            log.warning("  No price data — skipping")
             upsert_impact(conn, ticker, company, pd.DataFrame(), {}, dry_run)
             continue
 
-        yf_adj = yf_df["adj_close"].dropna()
-        custom_adj = build_custom_adjusted(stooq_df, actions_df)
+        s1 = yf_df["adj_close"].dropna()
+        s2 = build_custom_adjusted(raw_df, actions_df)
 
-        flags_df = detect_divergences(yf_adj, custom_adj, actions_df)
+        flags_df = detect_divergences(s1, s2, actions_df)
         n = len(flags_df)
         if n > 0:
-            log.info(f"  {n} flag(s), max divergence={flags_df['divergence_pct'].max():.3f}%")
+            log.info(f"  FLAGGED: {n} day(s), max={flags_df['divergence_pct'].max():.4f}%")
             total_flagged += 1
             total_flags += n
         else:
-            log.info("  Clean")
+            log.info("  Clean (no divergence above threshold)")
 
-        impact = calculate_impact(yf_adj, custom_adj)
+        impact = calculate_impact(s1, s2)
         if impact.get("return_error_pct") is not None:
             log.info(f"  Return error: {impact['return_error_pct']:.4f} pp")
 

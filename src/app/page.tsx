@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, RefreshCw, GitBranch, Database, TrendingUp, AlertTriangle, BarChart3 } from 'lucide-react';
-import FlagsTable, { FlagRow } from '@/components/FlagsTable';
+import FlagsTable, { type FlagRow } from '@/components/FlagsTable';
 import StockDetailPanel from '@/components/StockDetailPanel';
-import Tooltip from '@/components/Tooltip';
+
+// ─── types ───────────────────────────────────────────────────────────────────
 
 interface Summary {
   totalFlags: number;
@@ -15,280 +14,309 @@ interface Summary {
   universeSize: number;
 }
 
-function formatTime(iso: string | null) {
-  if (!iso) return 'Not yet run';
-  return new Date(iso).toLocaleString('en-IN', {
-    dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata',
-  }) + ' IST';
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function n2(v: number | null | undefined): string {
+  return v == null ? '—' : v.toFixed(2);
 }
 
-interface KpiCardProps {
-  label: string;
-  value: string | number | null;
-  sub: string;
-  info: string;
-  accentColor: string;
-  accentBg: string;
-  icon: React.ElementType;
-  loading: boolean;
-  delay?: number;
-}
-
-function KpiCard({ label, value, sub, info, accentColor, accentBg, icon: Icon, loading, delay = 0 }: KpiCardProps) {
+function lastRunLabel(iso: string | null): string {
+  if (!iso) return 'Never run';
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay }}
-      className="card p-6 flex flex-col gap-3"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
-            {label}
-          </p>
-          <Tooltip content={info} side="bottom" />
-        </div>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: accentBg }}>
-          <Icon className="w-4 h-4" style={{ color: accentColor }} />
-        </div>
-      </div>
-
-      {loading
-        ? <div className="skeleton h-9 w-28 rounded" />
-        : <p className="text-3xl font-bold tracking-tight mono" style={{ color: accentColor }}>{value ?? '—'}</p>
-      }
-
-      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>{sub}</p>
-    </motion.div>
+    new Date(iso).toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    }) + ' IST'
   );
 }
 
-export default function HomePage() {
+// ─── Inline info tooltip (CSS-only hover, info on demand only) ───────────────
+
+function Info({ tip, left }: { tip: string; left?: boolean }) {
+  return (
+    <span className={`info-btn${left ? ' tip-left' : ''}`} role="img" aria-label="Info">
+      i
+      <span className="tip">{tip}</span>
+    </span>
+  );
+}
+
+// ─── KPI card ────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  label, value, sub, color, info, loading,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  color: string;
+  info: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--t3)' }}>
+          {label}
+        </p>
+        <Info tip={info} />
+      </div>
+      {loading ? (
+        <div className="skeleton" style={{ height: 36, width: 100, borderRadius: 6 }} />
+      ) : (
+        <p style={{ fontSize: 32, fontWeight: 700, color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+          {value}
+        </p>
+      )}
+      <p style={{ fontSize: 13, color: 'var(--t3)', lineHeight: 1.5 }}>{sub}</p>
+    </div>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+
+export default function Page() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [flags, setFlags] = useState<FlagRow[]>([]);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [flagsLoading, setFlagsLoading] = useState(true);
-  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ticker, setTicker] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  const fetchData = useCallback(() => {
-    setSummaryLoading(true);
-    setFlagsLoading(true);
-    fetch('/api/summary')
-      .then(r => r.json())
-      .then(d => { setSummary(d); setSummaryLoading(false); })
-      .catch(() => setSummaryLoading(false));
-    fetch('/api/flags?sort=returnErrorPct&limit=80')
-      .then(r => r.json())
-      .then(d => { setFlags(d.data ?? []); setFlagsLoading(false); })
-      .catch(() => setFlagsLoading(false));
+  useEffect(() => {
+    const saved = (localStorage.getItem('theme') ?? 'light') as 'light' | 'dark';
+    setTheme(saved);
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  function toggleTheme() {
+    const next: 'light' | 'dark' = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [sr, fr] = await Promise.all([
+        fetch('/api/summary').then((r) => r.json()),
+        fetch('/api/flags?sort=return_error_pct&limit=80').then((r) => r.json()),
+      ]);
+      setSummary(sr as Summary);
+      setFlags((fr.data ?? []) as FlagRow[]);
+    } catch {
+      // keep stale state on network error
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const universeSize = summary?.universeSize ?? 80;
+
+  // Shared layout styles
+  const wrap: React.CSSProperties = { maxWidth: 1160, margin: '0 auto', padding: '0 24px' };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-
-      {/* Header */}
-      <header
-        className="sticky top-0 z-40 border-b"
-        style={{ background: 'rgba(5,8,15,0.9)', backdropFilter: 'blur(20px)', borderColor: 'var(--border)' }}
-      >
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: 'var(--cyan-dim)', border: '1px solid var(--cyan-border)' }}>
-              <BarChart3 className="w-3.5 h-3.5" style={{ color: 'var(--cyan)' }} />
+    <>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        background: 'var(--surface)',
+        borderBottom: '1px solid var(--border)',
+        boxShadow: 'var(--shadow)',
+      }}>
+        <div style={{ ...wrap, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          {/* Left: Logo + name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+              background: 'var(--blue-bg)', border: '1px solid var(--blue)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path d="M2 12L5.5 7L9 10L12.5 4L14.5 6" stroke="var(--blue)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-1)' }}>CA Analytics</span>
-            <span className="hidden sm:block text-xs" style={{ color: 'var(--text-4)' }}>·</span>
-            <span className="hidden sm:block text-xs truncate" style={{ color: 'var(--text-3)' }}>Adjustment Consistency Monitor</span>
+            <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--t1)' }}>CA Analytics</span>
+            <span style={{ color: 'var(--border2)', fontSize: 15, userSelect: 'none' }}>/</span>
+            <span style={{ fontSize: 14, color: 'var(--t3)', fontWeight: 400 }}>Consistency Monitor</span>
           </div>
 
-          <div className="flex items-center gap-4 flex-shrink-0">
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="pulse-dot" />
-              <span className="text-xs mono" style={{ color: 'var(--text-3)' }}>
-                {summaryLoading ? '…' : formatTime(summary?.lastRunAt ?? null)}
+          {/* Right: last run + theme toggle + refresh */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: 'var(--green)', display: 'inline-block', flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 12, color: 'var(--t3)' }}>
+                {loading ? '…' : lastRunLabel(summary?.lastRunAt ?? null)}
               </span>
             </div>
 
-            <div className="hidden md:flex items-center gap-1.5 text-xs">
-              <span className="px-2 py-0.5 rounded-md mono"
-                style={{ background: 'var(--cyan-dim)', color: 'var(--cyan)', border: '1px solid var(--cyan-border)' }}>
-                S1: Yahoo Adj
-              </span>
-              <span style={{ color: 'var(--text-4)' }}>vs</span>
-              <span className="px-2 py-0.5 rounded-md mono"
-                style={{ background: 'var(--orange-dim)', color: 'var(--orange)', border: '1px solid var(--orange-border)' }}>
-                S2: Custom Adj
-              </span>
-            </div>
+            <button
+              onClick={toggleTheme}
+              title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              style={{
+                width: 32, height: 32, borderRadius: 8, fontSize: 14,
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                color: 'var(--t2)', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
 
-            <button onClick={fetchData} title="Refresh"
-              className="p-1.5 rounded-lg transition-colors hover:bg-white/5"
-              style={{ color: 'var(--text-3)' }}>
-              <RefreshCw className="w-4 h-4" />
+            <button
+              id="refresh-btn"
+              onClick={load}
+              style={{
+                padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                color: 'var(--t2)', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ↻ Refresh
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+      {/* ── Main ───────────────────────────────────────────────────── */}
+      <main style={{ ...wrap, paddingTop: 40, paddingBottom: 64, display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-        {/* Hero + How it works */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="grid lg:grid-cols-3 gap-5"
-        >
-          {/* Hero */}
-          <div className="lg:col-span-2 card p-8 relative overflow-hidden">
-            <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.06) 0%, transparent 70%)' }} />
-            <h1 className="text-2xl font-bold mb-3 leading-snug gradient-text">
-              Corporate Actions<br />Consistency Monitor
-            </h1>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-2)', maxWidth: '520px' }}>
-              When a stock pays a dividend or splits, historical prices need backward adjustment.
-              This pipeline re-applies that adjustment from scratch and compares it to Yahoo Finance&apos;s
-              internal result — finding where the two differ and measuring the exact impact on 3-year returns.
-            </p>
-            <div className="flex flex-wrap gap-4 mt-5 text-xs" style={{ color: 'var(--text-3)' }}>
-              <div className="flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5" style={{ color: 'var(--cyan)' }} />
-                Neon Postgres
-              </div>
-              <div className="flex items-center gap-1.5">
-                <GitBranch className="w-3.5 h-3.5" style={{ color: 'var(--cyan)' }} />
-                GitHub Actions · Mon–Fri 09:00 IST
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5" style={{ color: 'var(--cyan)' }} />
-                80 stocks · 3-year daily window
-              </div>
-            </div>
-          </div>
-
-          {/* How it works */}
-          <div className="card p-6 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>How it works</p>
-            {[
-              { n: '01', title: 'Ingest', body: 'yfinance fetches 3yr OHLCV + corporate actions for all 80 stocks in one batched API call.' },
-              { n: '02', title: 'Dual series', body: 'S1 = Yahoo Adj Close. S2 = raw close with textbook backward adjustment applied from scratch.' },
-              { n: '03', title: 'Flag & measure', body: 'Flag days where S1 vs S2 diverge >0.1%. Compute 3-year return with each series and report the gap.' },
-            ].map(({ n, title, body }) => (
-              <div key={n} className="flex gap-3">
-                <span className="text-xs font-bold mono flex-shrink-0 mt-0.5" style={{ color: 'var(--cyan)' }}>{n}</span>
-                <div>
-                  <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-1)' }}>{title}</p>
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>{body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* KPI cards */}
+        {/* Title + one-liner */}
         <div>
-          <div className="flex items-center gap-2 mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Latest pipeline run</p>
-            <Tooltip content="Results are computed by the nightly GitHub Actions pipeline and stored in Postgres. This page reads pre-computed results — no live market API calls on load." side="right" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+              Corporate Actions Consistency Monitor
+            </h1>
+            <Info tip="Stock prices need to be adjusted whenever a company pays a dividend or splits its shares — otherwise historical return calculations look wrong. This tool checks whether Yahoo Finance actually applied those adjustments correctly by running the same math independently and comparing results." />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <KpiCard
-              label="Inconsistencies Found"
-              value={summaryLoading ? null : summary?.totalFlags ?? 0}
-              sub="Date-stock pairs where the two adjusted series diverge by more than 0.1% near a corporate action"
-              info="Flag = one stock, one day where |Series1 − Series2| / Series1 > 0.1%. Covers real adjustment timing and rounding differences."
-              accentColor="var(--amber)"
-              accentBg="var(--amber-dim)"
-              icon={AlertTriangle}
-              loading={summaryLoading}
-              delay={0}
-            />
-            <KpiCard
-              label="Worst Return Error"
-              value={summaryLoading ? null : summary?.maxReturnError != null ? `${summary.maxReturnError.toFixed(2)} pp` : '0 pp'}
-              sub="Largest gap between 3-year returns computed from each series, in percentage points"
-              info="For each stock: |return_S1 − return_S2| where return = (price_end / price_start) − 1 over the shared 3-year window."
-              accentColor="var(--red)"
-              accentBg="rgba(248,113,113,0.1)"
-              icon={TrendingUp}
-              loading={summaryLoading}
-              delay={0.07}
-            />
-            <KpiCard
-              label="Stocks Affected"
-              value={summaryLoading ? null : `${summary?.stocksAffected ?? 0} / ${summary?.universeSize ?? 80}`}
-              sub="Stocks with at least one flagged adjustment divergence across 80 tracked names"
-              info="80 stocks: Nifty 50 (IN) + top 20 S&P 500 (US) + 10 global large-caps. Affected = 1+ flagged days in the 3-year window."
-              accentColor="var(--cyan)"
-              accentBg="var(--cyan-dim)"
-              icon={Activity}
-              loading={summaryLoading}
-              delay={0.14}
-            />
+          <p style={{ fontSize: 15, color: 'var(--t2)', lineHeight: 1.7, maxWidth: 620 }}>
+            Tracks 80 stocks across Nifty 50, S&amp;P 500, and global markets. Runs every weekday morning.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', marginTop: 10 }}>
+            {[
+              'Nifty 50 · S&P 500 · Global (80 stocks)',
+              'yfinance · no API key needed',
+              'GitHub Actions · Mon–Fri 09:00 IST',
+              'Neon Postgres',
+            ].map((t) => (
+              <span key={t} style={{ fontSize: 12, color: 'var(--t3)' }}>· {t}</span>
+            ))}
           </div>
         </div>
 
+        {/* KPI row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <KpiCard
+            label="Inconsistencies Found"
+            value={loading ? '—' : String(summary?.totalFlags ?? 0)}
+            sub="Date-stock pairs where the two calculations disagreed by more than 0.02%"
+            color="var(--amber)"
+            info="Each 'flag' is a specific stock on a specific day where our adjustment math didn't match Yahoo's. Could be a missed dividend, a timing issue, or rounding on their end."
+            loading={loading}
+          />
+          <KpiCard
+            label="Worst Return Error"
+            value={loading ? '—' : (summary?.maxReturnError != null ? `${n2(summary.maxReturnError)} pp` : '0 pp')}
+            sub="Biggest 3-year return gap between the two calculations, in percentage points"
+            color="var(--red)"
+            info="If you used Yahoo's numbers to calculate a stock's 3-year return, this is how many percentage points you'd be off compared to our calculation. Even half a percentage point compounds into real money."
+            loading={loading}
+          />
+          <KpiCard
+            label="Stocks Affected"
+            value={loading ? '—' : `${summary?.stocksAffected ?? 0} / ${universeSize}`}
+            sub="Stocks with at least one day where the two series disagreed"
+            color="var(--blue)"
+            info="Out of the 80 stocks we track, how many had at least one day where Yahoo's adjustment didn't match what the math should produce. Even one bad day can throw off a return calculation."
+            loading={loading}
+          />
+        </div>
+
         {/* Legend */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3 rounded-xl border text-xs"
-          style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)', color: 'var(--text-3)' }}>
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-0.5 rounded flex-shrink-0" style={{ background: 'var(--cyan)', display: 'inline-block' }} />
-            <strong style={{ color: 'var(--text-2)' }}>Series 1</strong> — Yahoo Finance Adj Close (internal pipeline)
+        <div style={{
+          display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+          gap: '6px 24px', padding: '11px 16px', fontSize: 13, color: 'var(--t3)',
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 20, height: 2, background: 'var(--blue)', display: 'inline-block', borderRadius: 1, flexShrink: 0 }} />
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <strong style={{ color: 'var(--t2)', fontWeight: 600 }}>S1</strong>
+              <span>Yahoo Finance&apos;s own adjusted close</span>
+              <Info tip="This is the price Yahoo publishes directly — they apply their own adjustment algorithm whenever a dividend or split happens." />
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-0.5 flex-shrink-0" style={{
-              display: 'inline-block',
-              backgroundImage: 'repeating-linear-gradient(90deg,#F97316 0,#F97316 5px,transparent 5px,transparent 9px)',
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 20, height: 2, display: 'inline-block', flexShrink: 0,
+              backgroundImage: 'repeating-linear-gradient(90deg,var(--orange) 0,var(--orange) 5px,transparent 5px,transparent 9px)',
             }} />
-            <strong style={{ color: 'var(--text-2)' }}>Series 2</strong> — Raw close + textbook backward adjustment
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <strong style={{ color: 'var(--t2)', fontWeight: 600 }}>S2</strong>
+              <span>Our independent calculation from raw prices</span>
+              <Info tip="We take the raw (unadjusted) price and apply the standard dividend/split formula ourselves from scratch. If Yahoo did it right, S1 and S2 should match exactly." />
+            </span>
           </div>
-          <div className="flex items-center gap-2 sm:ml-auto">
-            <strong style={{ color: 'var(--text-2)' }}>Threshold</strong> &gt;0.1% divergence
-          </div>
+          <span style={{ marginLeft: 'auto', fontSize: 12 }}>flags where gap &gt; 0.02%</span>
         </div>
 
         {/* Flags table */}
         <div>
-          <div className="flex items-center gap-2 mb-4">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Flagged stocks</p>
-            <Tooltip content="Sorted by return error. Click a column header to re-sort. Click any row to open the detail panel with the full price chart and per-date breakdown." side="right" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--t3)' }}>
+                Flagged Stocks
+              </p>
+              {!loading && flags.length > 0 && (
+                <span style={{ fontSize: 12, color: 'var(--t2)' }}>({flags.length})</span>
+              )}
+              <Info tip="Stocks where at least one day in the past 3 years showed a difference between Yahoo's adjustment and ours. Click any row to see the full breakdown — chart, flagged dates, and return impact." />
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--t3)' }}>Click a row to see the detail breakdown →</p>
           </div>
           <FlagsTable
             rows={flags}
-            loading={flagsLoading}
-            selectedTicker={selectedTicker}
-            onSelectTicker={(t) => setSelectedTicker(p => p === t ? null : t)}
+            loading={loading}
+            selectedTicker={ticker}
+            onSelectTicker={(t) => setTicker((prev) => (prev === t ? null : t))}
           />
         </div>
 
       </main>
 
-      {/* Footer */}
-      <footer className="max-w-7xl mx-auto px-6 py-5 mt-2 border-t flex flex-wrap items-center justify-between gap-3 text-xs"
-        style={{ borderColor: 'var(--border)', color: 'var(--text-4)' }}>
+      {/* ── Footer ─────────────────────────────────────────────────── */}
+      <footer style={{
+        ...wrap, paddingTop: 18, paddingBottom: 24,
+        borderTop: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 8, fontSize: 13, color: 'var(--t3)',
+      }}>
         <span>CA Analytics · Corporate Actions Adjustment Consistency</span>
-        <div className="flex items-center gap-4">
-          <span>Data: <span style={{ color: 'var(--cyan)' }}>Yahoo Finance</span></span>
-          <span>DB: <span style={{ color: 'var(--text-3)' }}>Neon Postgres</span></span>
-          <span>Host: <span style={{ color: 'var(--text-3)' }}>Vercel</span></span>
+        <div style={{ display: 'flex', gap: 18 }}>
+          {[['Data', 'Yahoo Finance'], ['DB', 'Neon Postgres'], ['Host', 'Vercel']].map(([k, v]) => (
+            <span key={k}>{k}: <span style={{ color: 'var(--t2)' }}>{v}</span></span>
+          ))}
         </div>
       </footer>
 
-      <StockDetailPanel ticker={selectedTicker} onClose={() => setSelectedTicker(null)} />
-
-      {selectedTicker && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-40"
-          style={{ background: 'rgba(5,8,15,0.75)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setSelectedTicker(null)}
+      {/* ── Detail panel + backdrop ────────────────────────────────── */}
+      <StockDetailPanel ticker={ticker} onClose={() => setTicker(null)} />
+      {ticker && (
+        <div
+          onClick={() => setTicker(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 40,
+            background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)',
+          }}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -1,247 +1,219 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal } from 'lucide-react';
-import { clsx } from 'clsx';
-import CorporateActionBadge from './CorporateActionBadge';
-import Tooltip from './Tooltip';
+import { useState } from 'react';
 
 export interface FlagRow {
   ticker: string;
-  companyName: string;
+  companyName: string | null;
   maxDivergencePct: number | null;
   worstFlagDate: string | null;
   returnYf: number | null;
   returnStooqAdj: number | null;
   returnErrorPct: number | null;
   nFlags: number;
-  primaryCause: 'dividend' | 'split' | 'both' | null;
+  primaryCause: string | null;
   lastFlagDate: string | null;
 }
 
 type SortKey = 'returnErrorPct' | 'maxDivergencePct' | 'nFlags' | 'ticker';
 
-interface FlagsTableProps {
+function f(v: number | null | undefined, d = 2): string {
+  return v == null ? '—' : v.toFixed(d);
+}
+
+// Info tooltip (CSS-only hover)
+function Info({ tip, left }: { tip: string; left?: boolean }) {
+  return (
+    <span className={`info-btn${left ? ' tip-left' : ''}`} role="img" aria-label="Info">
+      i<span className="tip">{tip}</span>
+    </span>
+  );
+}
+
+function CauseBadge({ cause }: { cause: string | null }) {
+  if (!cause) return <span style={{ color: 'var(--t3)' }}>—</span>;
+  const colors: Record<string, { bg: string; color: string }> = {
+    dividend: { bg: 'var(--blue-bg)',  color: 'var(--blue)' },
+    split:    { bg: 'var(--amber-bg)', color: 'var(--amber)' },
+    both:     { bg: 'var(--red-bg)',   color: 'var(--red)' },
+  };
+  const c = colors[cause] ?? { bg: 'var(--surface2)', color: 'var(--t3)' };
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+      background: c.bg, color: c.color,
+    }}>
+      {cause.charAt(0).toUpperCase() + cause.slice(1)}
+    </span>
+  );
+}
+
+export default function FlagsTable({
+  rows, loading, selectedTicker, onSelectTicker,
+}: {
   rows: FlagRow[];
-  loading?: boolean;
+  loading: boolean;
   selectedTicker: string | null;
-  onSelectTicker: (ticker: string) => void;
-}
-
-const columns: { key: SortKey; label: string; info: string }[] = [
-  {
-    key: 'ticker',
-    label: 'Ticker',
-    info: 'NSE ticker symbol. All tickers use the .NS suffix (National Stock Exchange). Click a row to see the full price series comparison.',
-  },
-  {
-    key: 'returnErrorPct',
-    label: 'Return Error (pp)',
-    info: 'How many percentage points off a 3-year return calculation would be if you used the less accurate source. Computed as |return_yf - return_stooq_adj| over the full 3-year window.',
-  },
-  {
-    key: 'maxDivergencePct',
-    label: 'Max Divergence',
-    info: 'Largest single-day relative difference between the two adjusted series: |adj_yf - adj_stooq| / adj_yf. Values above 0.5% near a corporate action are flagged.',
-  },
-  {
-    key: 'nFlags',
-    label: 'Flags',
-    info: 'Number of individual trading days where the divergence exceeded 0.5% and a corporate action (dividend or split) was within 7 days.',
-  },
-];
-
-function fmt(n: number | null, d = 2) {
-  return n == null ? '—' : n.toFixed(d);
-}
-
-function SortIndicator({ active, asc }: { active: boolean; asc: boolean }) {
-  if (!active) return <ChevronsUpDown className="w-3 h-3 opacity-25" />;
-  return asc ? <ChevronUp className="w-3 h-3 text-indigo-400" /> : <ChevronDown className="w-3 h-3 text-indigo-400" />;
-}
-
-const CAUSE_FILTERS = ['all', 'dividend', 'split', 'both'] as const;
-
-export default function FlagsTable({ rows, loading, selectedTicker, onSelectTicker }: FlagsTableProps) {
+  onSelectTicker: (t: string) => void;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>('returnErrorPct');
-  const [sortAsc, setSortAsc] = useState(false);
-  const [causeFilter, setCauseFilter] = useState<string>('all');
+  const [dir, setDir] = useState<'desc' | 'asc'>('desc');
 
-  const handleSort = useCallback((key: SortKey) => {
-    setSortKey((prev) => {
-      if (prev === key) setSortAsc((a) => !a);
-      else { setSortAsc(false); }
-      return key;
-    });
-  }, []);
+  function handleSort(k: SortKey) {
+    if (sortKey === k) setDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+    else { setSortKey(k); setDir('desc'); }
+  }
 
-  const displayRows = [...rows]
-    .filter((r) => causeFilter === 'all' || r.primaryCause === causeFilter)
-    .sort((a, b) => {
-      let av: number | string | null, bv: number | string | null;
-      if (sortKey === 'ticker') { av = a.ticker; bv = b.ticker; }
-      else if (sortKey === 'nFlags') { av = a.nFlags; bv = b.nFlags; }
-      else if (sortKey === 'maxDivergencePct') { av = a.maxDivergencePct; bv = b.maxDivergencePct; }
-      else { av = a.returnErrorPct; bv = b.returnErrorPct; }
+  const sorted = [...rows].sort((a, b) => {
+    let av: number | string | null = null;
+    let bv: number | string | null = null;
+    if (sortKey === 'returnErrorPct') { av = a.returnErrorPct; bv = b.returnErrorPct; }
+    else if (sortKey === 'maxDivergencePct') { av = a.maxDivergencePct; bv = b.maxDivergencePct; }
+    else if (sortKey === 'nFlags') { av = a.nFlags; bv = b.nFlags; }
+    else { av = a.ticker; bv = b.ticker; }
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+    return dir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
 
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      if (typeof av === 'string') {
-        return sortAsc ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
-      }
-      return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
-    });
+  const arrow = (k: SortKey) => sortKey === k ? (dir === 'desc' ? ' ↓' : ' ↑') : '';
+
+  const wrapStyle: React.CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    boxShadow: 'var(--shadow)',
+  };
+
+  if (loading) {
+    return (
+      <div style={wrapStyle}>
+        <table className="data-table">
+          <thead><tr>
+            {['Ticker', 'Return Error', 'Max Divergence', 'Flags', 'Cause', 'Worst Date', 'S1 Return', 'S2 Return'].map((h) => (
+              <th key={h}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <tr key={i} style={{ cursor: 'default' }}>
+                {Array.from({ length: 8 }).map((_, j) => (
+                  <td key={j} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="skeleton" style={{ height: 14, width: j === 0 ? 80 : 56 }} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div style={{ ...wrapStyle, padding: '52px 24px', textAlign: 'center' }}>
+        <p style={{ fontSize: 16, color: 'var(--t2)', marginBottom: 8, fontWeight: 500 }}>No flagged stocks yet</p>
+        <p style={{ fontSize: 14, color: 'var(--t3)', lineHeight: 1.6 }}>
+          Go to GitHub → Actions → &quot;Daily Corporate Actions Ingestion &amp; Analysis&quot; → Run workflow
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="glass-card overflow-hidden">
-      <div
-        className="flex items-start sm:items-center justify-between px-6 py-5 border-b flex-col sm:flex-row gap-3"
-        style={{ borderColor: 'var(--color-border)' }}
-      >
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            Flagged Stocks
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            Click any row to open the side-by-side price chart for that stock
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <SlidersHorizontal className="w-3.5 h-3.5" style={{ color: 'var(--color-text-muted)' }} />
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Filter by cause:</span>
-          <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
-            {CAUSE_FILTERS.map((f) => (
-              <button
-                key={f}
-                id={`filter-${f}`}
-                onClick={() => setCauseFilter(f)}
-                className="px-3 py-1.5 text-xs font-medium transition-colors capitalize"
-                style={{
-                  background: causeFilter === f ? 'rgba(99,102,241,0.15)' : 'transparent',
-                  color: causeFilter === f ? '#818CF8' : 'var(--color-text-muted)',
-                }}
-              >
-                {f === 'all' ? 'All' : f}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="table-wrapper">
+    <div style={wrapStyle}>
+      <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th key={col.key} id={`th-${col.key}`} onClick={() => handleSort(col.key)}>
-                  <div className="flex items-center gap-1.5">
-                    {col.label}
-                    <Tooltip content={col.info} side="bottom" />
-                    <SortIndicator active={sortKey === col.key} asc={sortAsc} />
-                  </div>
-                </th>
-              ))}
-              <th>Company</th>
+              <th className="sortable" onClick={() => handleSort('ticker')}>
+                Ticker{arrow('ticker')}
+              </th>
+              <th className="sortable" onClick={() => handleSort('returnErrorPct')}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  Return Error{arrow('returnErrorPct')}
+                  <Info tip="How many percentage points your 3-year return would be off if you used Yahoo's numbers vs our calculation. Bigger means more misleading the data would be." />
+                </span>
+              </th>
+              <th className="sortable" onClick={() => handleSort('maxDivergencePct')}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  Max Divergence{arrow('maxDivergencePct')}
+                  <Info tip="The worst single-day difference between S1 and S2, as a percentage of the S1 price. This is the biggest gap we saw on any one day." />
+                </span>
+              </th>
+              <th className="sortable" onClick={() => handleSort('nFlags')}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  Flag Days{arrow('nFlags')}
+                  <Info tip="How many individual days this stock showed a disagreement between the two series. More days usually means a bigger or recurring adjustment problem." />
+                </span>
+              </th>
               <th>
-                <div className="flex items-center gap-1.5">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   Cause
-                  <Tooltip content="What type of corporate action caused this divergence — a cash dividend, a stock split, or both in the same period." side="bottom" />
-                </div>
+                  <Info tip="What type of corporate action was happening nearby when the disagreement occurred — dividend payment, stock split, or both." left />
+                </span>
               </th>
               <th>Worst Date</th>
               <th>
-                <div className="flex items-center gap-1.5">
-                  YF Return
-                  <Tooltip content="3-year cumulative return using Yahoo Finance's own Adj Close series (their internal backward adjustment)." side="bottom" />
-                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  S1 Return
+                  <Info tip="3-year cumulative return using Yahoo's own adjusted close. This is what most tools would show you by default." left />
+                </span>
               </th>
               <th>
-                <div className="flex items-center gap-1.5">
-                  Series 2 Return
-                  <Tooltip content="3-year cumulative return using the custom backward-adjustment applied to Yahoo's raw close prices." side="bottom" />
-                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  S2 Return
+                  <Info tip="3-year cumulative return using our independently calculated adjusted series. If this differs from S1, the data quality issue has a real return impact." left />
+                </span>
               </th>
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 9 }).map((_, j) => (
-                    <td key={j}>
-                      <div className="skeleton h-4 rounded" style={{ width: `${50 + ((i * 3 + j * 7) % 50)}px` }} />
-                    </td>
-                  ))}
+            {sorted.map((row) => {
+              const active = selectedTicker === row.ticker;
+              const errColor = row.returnErrorPct != null && row.returnErrorPct > 1
+                ? 'var(--red)'
+                : 'var(--amber)';
+              return (
+                <tr
+                  key={row.ticker}
+                  className={active ? 'row-active' : ''}
+                  onClick={() => onSelectTicker(row.ticker)}
+                >
+                  <td>
+                    <div style={{ fontWeight: 600, color: 'var(--t1)', fontSize: 14 }}>
+                      {row.ticker.replace(/\.(NS|BO)$/i, '')}
+                    </div>
+                    {row.companyName && (
+                      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 1 }}>{row.companyName}</div>
+                    )}
+                  </td>
+                  <td style={{ fontWeight: 700, color: errColor, fontVariantNumeric: 'tabular-nums' }}>
+                    {row.returnErrorPct != null ? `${f(row.returnErrorPct)} pp` : '—'}
+                  </td>
+                  <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--t2)' }}>
+                    {row.maxDivergencePct != null ? `${f(row.maxDivergencePct, 3)}%` : '—'}
+                  </td>
+                  <td style={{ color: 'var(--t1)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                    {row.nFlags}
+                  </td>
+                  <td><CauseBadge cause={row.primaryCause} /></td>
+                  <td style={{ fontSize: 13, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                    {row.worstFlagDate ? String(row.worstFlagDate).slice(0, 10) : '—'}
+                  </td>
+                  <td style={{ color: 'var(--blue)', fontVariantNumeric: 'tabular-nums' }}>
+                    {row.returnYf != null ? `${f(row.returnYf, 1)}%` : '—'}
+                  </td>
+                  <td style={{ color: 'var(--orange)', fontVariantNumeric: 'tabular-nums' }}>
+                    {row.returnStooqAdj != null ? `${f(row.returnStooqAdj, 1)}%` : '—'}
+                  </td>
                 </tr>
-              ))
-            ) : displayRows.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="text-center py-16" style={{ color: 'var(--color-text-muted)' }}>
-                  {rows.length === 0
-                    ? 'No data yet — run the ingestion pipeline first.'
-                    : 'No stocks match this filter.'}
-                </td>
-              </tr>
-            ) : (
-              <AnimatePresence mode="popLayout">
-                {displayRows.map((row, i) => (
-                  <motion.tr
-                    key={row.ticker}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: i * 0.015 }}
-                    className={clsx(selectedTicker === row.ticker ? 'selected' : '')}
-                    onClick={() => onSelectTicker(row.ticker)}
-                    id={`row-${row.ticker.replace('.', '-')}`}
-                  >
-                    <td>
-                      <span className="mono font-semibold text-indigo-300 text-sm">
-                        {row.ticker.replace('.NS', '')}
-                      </span>
-                    </td>
-                    <td>
-                      {row.returnErrorPct != null ? (
-                        <span
-                          className="mono font-semibold"
-                          style={{
-                            color: row.returnErrorPct > 2 ? '#EF4444'
-                                 : row.returnErrorPct > 0.5 ? '#F59E0B'
-                                 : '#10B981',
-                          }}
-                        >
-                          {fmt(row.returnErrorPct)} pp
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td>
-                      <span className="mono text-amber-400 font-medium">{fmt(row.maxDivergencePct, 3)}%</span>
-                    </td>
-                    <td>
-                      <span className="mono" style={{ color: 'var(--color-text-secondary)' }}>{row.nFlags}</span>
-                    </td>
-                    <td style={{ maxWidth: '180px' }}>
-                      <span className="text-xs truncate block" style={{ color: 'var(--color-text-secondary)' }}>
-                        {row.companyName}
-                      </span>
-                    </td>
-                    <td><CorporateActionBadge cause={row.primaryCause} /></td>
-                    <td className="mono text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                      {row.worstFlagDate ?? '—'}
-                    </td>
-                    <td className="mono text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                      {row.returnYf != null ? `${fmt(row.returnYf, 1)}%` : '—'}
-                    </td>
-                    <td className="mono text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                      {row.returnStooqAdj != null ? `${fmt(row.returnStooqAdj, 1)}%` : '—'}
-                    </td>
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            )}
+              );
+            })}
           </tbody>
         </table>
       </div>
