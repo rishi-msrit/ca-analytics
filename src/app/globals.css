@@ -1,117 +1,92 @@
 @import "tailwindcss";
 
-/* ── Fonts ──────────────────────────────────────────────────────── */
-/* DM Sans loaded via layout.tsx <link> */
-
 /* ── Theme tokens ────────────────────────────────────────────────── */
 :root {
-  /* Light mode (default) */
-  --bg:       #f0f2f5;
+  --bg:       #f7f8fa;
   --surface:  #ffffff;
-  --surface2: #f8f9fb;
-  --border:   #e2e6ec;
-  --border2:  #d0d5dd;
+  --surface2: #f2f3f6;
+  --border:   #e5e7eb;
+  --border2:  #d1d5db;
   --t1:       #111827;
-  --t2:       #6b7280;
+  --t2:       #4b5563;
   --t3:       #9ca3af;
   --blue:     #2563eb;
-  --blue-bg:  #eff6ff;
+  --blue-soft: #dbeafe;
   --red:      #dc2626;
-  --red-bg:   #fef2f2;
+  --red-soft: #fee2e2;
   --amber:    #d97706;
-  --amber-bg: #fffbeb;
+  --amber-soft: #fef3c7;
   --green:    #16a34a;
   --orange:   #ea580c;
-  --shadow:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow:   0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
 }
 
 [data-theme="dark"] {
-  --bg:       #0a0c10;
-  --surface:  #13161e;
-  --surface2: #0f1218;
-  --border:   #1f2533;
-  --border2:  #2a3347;
-  --t1:       #e8eaf0;
-  --t2:       #7d8799;
-  --t3:       #4a5568;
-  --blue:     #4f9cf9;
-  --blue-bg:  rgba(79,156,249,0.08);
+  --bg:       #09090b;
+  --surface:  #111113;
+  --surface2: #18181b;
+  --border:   #27272a;
+  --border2:  #3f3f46;
+  --t1:       #fafafa;
+  --t2:       #a1a1aa;
+  --t3:       #52525b;
+  --blue:     #60a5fa;
+  --blue-soft: rgba(96,165,250,0.1);
   --red:      #f87171;
-  --red-bg:   rgba(248,113,113,0.08);
+  --red-soft: rgba(248,113,113,0.08);
   --amber:    #fbbf24;
-  --amber-bg: rgba(251,191,36,0.08);
-  --green:    #34d399;
+  --amber-soft: rgba(251,191,36,0.08);
+  --green:    #4ade80;
   --orange:   #fb923c;
-  --shadow:   0 1px 3px rgba(0,0,0,0.4);
+  --shadow-sm: none;
+  --shadow:   none;
 }
 
-/* ── Base ────────────────────────────────────────────────────────── */
+/* ── Reset ───────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-html { font-size: 16px; }
 
 body {
   background: var(--bg);
   color: var(--t1);
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   line-height: 1.6;
-  min-height: 100vh;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.15s, color 0.15s;
 }
 
-/* ── Utility classes ─────────────────────────────────────────────── */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-}
-
-.t1 { color: var(--t1); }
-.t2 { color: var(--t2); }
-.t3 { color: var(--t3); }
-.blue { color: var(--blue); }
-.bg-surface { background: var(--surface); }
-.bg-surface2 { background: var(--surface2); }
-.border-base { border: 1px solid var(--border); }
-
-/* ── Skeleton loader ─────────────────────────────────────────────── */
+/* ── Skeleton ────────────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
   background-size: 400% 100%;
   animation: sk 1.5s ease-in-out infinite;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 @keyframes sk {
   from { background-position: 100% 0; }
   to   { background-position: -100% 0; }
 }
 
-/* ── Info tooltip ────────────────────────────────────────────────── */
-.info-btn {
+/* ── Info tooltip (hover-only) ───────────────────────────────────── */
+.info-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
+  width: 15px; height: 15px;
   border-radius: 50%;
-  border: 1px solid var(--border2);
   background: var(--surface2);
+  border: 1px solid var(--border);
   color: var(--t3);
   font-size: 9px;
   font-weight: 700;
   cursor: default;
   flex-shrink: 0;
-  vertical-align: middle;
   position: relative;
+  vertical-align: middle;
   transition: border-color 0.15s, color 0.15s;
 }
-.info-btn:hover {
-  border-color: var(--blue);
-  color: var(--blue);
-}
-.info-btn .tip {
+.info-dot:hover { border-color: var(--blue); color: var(--blue); }
+.info-dot .tip {
   display: none;
   position: absolute;
   bottom: calc(100% + 8px);
@@ -123,8 +98,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  font-size: 12.5px;
   font-weight: 400;
   line-height: 1.55;
   color: var(--t2);
@@ -132,53 +107,8 @@ body {
   white-space: normal;
   pointer-events: none;
 }
-.info-btn:hover .tip { display: block; }
-
-/* Right-aligned tooltip (for last columns) */
-.info-btn.tip-left .tip {
-  left: auto;
-  right: 0;
-  transform: none;
-}
-
-/* ── Table ────────────────────────────────────────────────────────── */
-.data-table { width: 100%; border-collapse: collapse; }
-
-.data-table th {
-  padding: 10px 14px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--t3);
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  user-select: none;
-}
-.data-table th.sortable { cursor: pointer; }
-.data-table th.sortable:hover { color: var(--t2); }
-
-.data-table td {
-  padding: 11px 14px;
-  font-size: 14px;
-  color: var(--t2);
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  transition: background 0.1s;
-}
-
-.data-table tbody tr {
-  cursor: pointer;
-}
-.data-table tbody tr:hover td { background: var(--surface2); }
-.data-table tbody tr.row-active td {
-  background: var(--blue-bg);
-}
-.data-table tbody tr.row-active td:first-child {
-  box-shadow: inset 2px 0 0 var(--blue);
-}
+.info-dot:hover .tip { display: block; }
+.info-dot.tip-left .tip { left: auto; right: 0; transform: none; }
 
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }

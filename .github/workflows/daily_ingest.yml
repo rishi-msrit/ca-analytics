@@ -2,8 +2,8 @@ name: Daily Corporate Actions Ingestion & Analysis
 
 on:
   schedule:
-    - cron: '30 3 * * 1-5'  # Mon-Fri, 09:00 IST
-  workflow_dispatch:
+    - cron: '30 3 * * 1-5'   # Mon-Fri, 09:00 IST (03:30 UTC)
+  workflow_dispatch:           # Manual trigger from Actions tab
 
 jobs:
   ingest-and-analyze:
@@ -24,6 +24,11 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r scripts/requirements.txt
+
+      - name: Run database migration (idempotent)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python db/migrate.py
 
       - name: Ingest prices and corporate actions
         env:
