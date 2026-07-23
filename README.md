@@ -5,7 +5,7 @@ An automated data pipeline and dashboard that detects calculation discrepancies 
 Covers 80 stocks: Nifty 50 (India), top 20 S&P 500 (US), and 10 global large-caps.
 
 **Live Dashboard:** Deployed on Vercel · **Automated Pipeline:** GitHub Actions (Mon–Fri, 16:30 IST after market close)
-
+*** Live: https://ca-analytics.vercel.app/
 ---
 
 ## What Problem Does This Solve?
