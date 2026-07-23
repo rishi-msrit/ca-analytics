@@ -23,7 +23,7 @@ except ImportError:
 
 
 def run():
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         print("DATABASE_URL not set")
         sys.exit(1)

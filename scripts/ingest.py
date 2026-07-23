@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 
 
 def get_connection():
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         log.error("DATABASE_URL not set")
         sys.exit(1)

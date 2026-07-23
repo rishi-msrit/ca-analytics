@@ -2,7 +2,7 @@ name: Daily Corporate Actions Ingestion & Analysis
 
 on:
   schedule:
-    - cron: '30 3 * * 1-5'   # Mon-Fri, 09:00 IST (03:30 UTC)
+    - cron: '0 11 * * 1-5'    # Mon-Fri, 16:30 IST (11:00 UTC) — after Indian market close
   workflow_dispatch:           # Manual trigger from Actions tab
 
 jobs:
