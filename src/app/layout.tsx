@@ -4,19 +4,18 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'CA Analytics — Corporate Actions Consistency Monitor',
   description:
-    'Checks whether Yahoo Finance correctly adjusts stock prices after dividends and splits across 80 tracked stocks.',
+    'Checks whether adjusted stock prices match independent calculations after dividends and splits.',
   keywords: ['corporate actions', 'Nifty 50', 'S&P 500', 'adjusted prices', 'data quality'],
   authors: [{ name: 'Rishi' }],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Apply saved theme before paint to avoid flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();`,
+            __html: `try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}`,
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -26,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
