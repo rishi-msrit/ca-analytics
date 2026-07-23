@@ -37,6 +37,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [ticker, setTicker] = useState<string | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [showExplanation, setShowExplanation] = useState(false);
 
   useEffect(() => {
     const saved = (localStorage.getItem('theme') ?? 'light') as 'light' | 'dark';
@@ -85,6 +86,18 @@ export default function Page() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={() => setShowExplanation(true)}
+              style={{
+                padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                background: 'var(--blue-soft)', border: '1px solid var(--blue)',
+                color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              <span style={{ fontWeight: 700 }}>i</span> How it works
+            </button>
+
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>
               {loading ? '…' : lastRunLabel(summary?.lastRunAt ?? null)}
             </span>
@@ -112,15 +125,14 @@ export default function Page() {
 
         {/* Hero: title + headline stats inline */}
         <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-0.03em', lineHeight: 1.15 }}>
               Corporate Actions Monitor
             </h1>
             <Info tip="Checks if stock prices are adjusted correctly after dividends and splits. We compare Yahoo Finance's adjustments against an independent calculation and flag every difference." />
           </div>
-          <p style={{ fontSize: 16, color: 'var(--t2)', lineHeight: 1.65, maxWidth: 560 }}>
-            Tracking {summary?.universeSize ?? 80} stocks across Nifty 50, S&amp;P 500, and global markets.
-            Updated every weekday.
+          <p style={{ fontSize: 16, color: 'var(--t2)', lineHeight: 1.65, maxWidth: 600 }}>
+            Tracking {summary?.universeSize ?? 80} stocks across Nifty 50, S&amp;P 500, and global markets. Updated every weekday.
           </p>
 
           {/* Stats — flat, no cards, just numbers with labels */}
@@ -220,6 +232,66 @@ export default function Page() {
           position: 'fixed', inset: 0, zIndex: 40,
           background: 'rgba(0,0,0,0.25)', backdropFilter: 'blur(2px)',
         }} />
+      )}
+
+      {/* ── Layman Explanation Modal ───────────────────────────────── */}
+      {showExplanation && (
+        <div
+          onClick={() => setShowExplanation(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 60,
+            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520, width: '100%',
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 12, padding: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              display: 'flex', flexDirection: 'column', gap: 16,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--t1)' }}>What does this website do?</h3>
+              <button
+                onClick={() => setShowExplanation(false)}
+                style={{
+                  background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--t3)',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: 14, color: 'var(--t2)', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p>
+                <strong style={{ color: 'var(--t1)' }}>1. What is a stock price adjustment?</strong><br />
+                When a company pays a dividend or splits its stock, its share price drops the next day. To keep historical charts accurate, financial portals adjust all past prices backward.
+              </p>
+              <p>
+                <strong style={{ color: 'var(--t1)' }}>2. The Problem:</strong><br />
+                Major portals like Yahoo Finance run these adjustments internally. If their calculation has timing or math discrepancies, anyone downloading that data gets incorrect return metrics.
+              </p>
+              <p>
+                <strong style={{ color: 'var(--t1)' }}>3. How this tool helps:</strong><br />
+                We independently re-calculate price adjustments from scratch using raw corporate action events. If Yahoo&apos;s numbers differ from textbook math, we flag the stock, date, and return gap.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowExplanation(false)}
+              style={{
+                alignSelf: 'flex-end', marginTop: 4, padding: '7px 18px', borderRadius: 8,
+                background: 'var(--blue)', color: '#fff', border: 'none', fontWeight: 600,
+                fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

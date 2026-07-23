@@ -48,7 +48,7 @@ const TH: React.CSSProperties = {
   padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 600,
   letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--t3)',
   background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-  whiteSpace: 'nowrap', userSelect: 'none',
+  whiteSpace: 'nowrap', userSelect: 'none', position: 'relative', zIndex: 5,
 };
 
 const TD: React.CSSProperties = {
@@ -91,7 +91,6 @@ export default function FlagsTable({
     background: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: 10,
-    overflow: 'hidden',
     boxShadow: 'var(--shadow-sm)',
   };
 

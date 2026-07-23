@@ -85,11 +85,11 @@ body {
   vertical-align: middle;
   transition: border-color 0.15s, color 0.15s;
 }
-.info-dot:hover { border-color: var(--blue); color: var(--blue); }
+.info-dot:hover { border-color: var(--blue); color: var(--blue); z-index: 120; }
 .info-dot .tip {
   display: none;
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
@@ -109,6 +109,8 @@ body {
 }
 .info-dot:hover .tip { display: block; }
 .info-dot.tip-left .tip { left: auto; right: 0; transform: none; }
+/* Show above instead of below */
+.info-dot.tip-up .tip { top: auto; bottom: calc(100% + 8px); }
 
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; height: 4px; }
