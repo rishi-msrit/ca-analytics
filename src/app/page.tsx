@@ -86,7 +86,7 @@ export default function Page() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-              {loading ? '\u2026' : lastRunLabel(summary?.lastRunAt ?? null)}
+              {loading ? '…' : lastRunLabel(summary?.lastRunAt ?? null)}
             </span>
             <button onClick={toggleTheme} title="Toggle theme" style={{
               width: 30, height: 30, borderRadius: 8, fontSize: 14,
@@ -94,14 +94,14 @@ export default function Page() {
               color: 'var(--t2)', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              {theme === 'light' ? '\uD83C\uDF19' : '\u2600\uFE0F'}
+              {theme === 'light' ? '🌙' : '☀️'}
             </button>
             <button onClick={load} style={{
               padding: '5px 12px', borderRadius: 8, fontSize: 13, fontWeight: 500,
               background: 'var(--surface2)', border: '1px solid var(--border)',
               color: 'var(--t2)', cursor: 'pointer', fontFamily: 'inherit',
             }}>
-              \u21BB Refresh
+              ↻ Refresh
             </button>
           </div>
         </div>
@@ -210,7 +210,7 @@ export default function Page() {
         flexWrap: 'wrap', gap: 8, fontSize: 12, color: 'var(--t3)',
       }}>
         <span>CA Analytics</span>
-        <span>Data from Yahoo Finance \u00b7 Neon Postgres \u00b7 Vercel</span>
+        <span>Data from Yahoo Finance · Neon Postgres · Vercel</span>
       </footer>
 
       {/* ── Detail panel ───────────────────────────────────────────── */}
